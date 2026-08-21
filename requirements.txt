@@ -1,0 +1,7 @@
+numpy
+Pillow
+torch
+torchvision
+# faiss-cpu é opcional: acelera a busca vetorial para acervos grandes.
+# Sem ele, o sistema usa um fallback em NumPy (mais lento, mas funcional).
+# faiss-cpu
