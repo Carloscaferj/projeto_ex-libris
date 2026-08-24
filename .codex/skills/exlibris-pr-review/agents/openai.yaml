@@ -1,0 +1,4 @@
+interface:
+  display_name: "Exlibris PR Review"
+  short_description: "Review lens for Ex Libris changes"
+  default_prompt: "Use $exlibris-pr-review to review this diff for regressions, architecture drift, and missing verification."

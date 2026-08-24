@@ -1,27 +1,11 @@
-"""Extração de embeddings visuais para marcas de proveniência e ex-libris.
-
-Usamos uma ResNet-50 pré-treinada (ImageNet) como backbone congelado: a
-camada final de classificação é removida e ficamos com o vetor de 2048
-dimensões produzido pelo global average pooling. Esse vetor captura textura,
-forma e composição gráfica — suficiente para comparar selos, carimbos,
-brasões e gravuras de ex-libris por similaridade, sem precisar de milhares
-de exemplos rotulados para treinar uma rede do zero.
-
-O "aprendizado a cada leitura" não acontece por back-propagation nesse
-backbone (isso exigiria retreinar a rede inteira a cada imagem, o que é
-inviável e arriscado). Em vez disso, o aprendizado incremental acontece na
-camada seguinte: o índice vetorial (vector_index.py) e os protótipos por
-obra (recognizer.py), que crescem e se refinam a cada novo exemplo
-confirmado — uma estratégia de aprendizado por memória (retrieval-based
-continual learning), robusta e sem esquecimento catastrófico.
-"""
+"""Extração de embeddings visuais para marcas de proveniência e ex-libris."""
 
 import threading
 
 import numpy as np
 from PIL import Image
 
-import config
+from exlibris import config
 
 _lock = threading.Lock()
 _modelo = None
@@ -48,7 +32,7 @@ def _carregar_modelo():
 
         weights = ResNet50_Weights.IMAGENET1K_V2
         modelo = resnet50(weights=weights)
-        modelo.fc = torch.nn.Identity()  # remove a camada de classificação
+        modelo.fc = torch.nn.Identity()
         modelo.eval()
 
         _device = _resolver_device()

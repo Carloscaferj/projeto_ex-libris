@@ -1,13 +1,4 @@
-"""Índice vetorial em memória para busca por similaridade entre marcas.
-
-Tenta usar FAISS (rápido, escala bem) e cai para busca por força bruta em
-NumPy caso a biblioteca não esteja instalada — o suficiente para acervos de
-até algumas dezenas de milhares de marcas.
-
-O índice é reconstruído a partir do banco de dados na inicialização e
-atualizado incrementalmente (`adicionar`) a cada nova marca confirmada, sem
-nunca precisar recalcular os vetores já existentes.
-"""
+"""Índice vetorial em memória para busca por similaridade entre marcas."""
 
 import numpy as np
 
@@ -21,7 +12,7 @@ except ImportError:
 class IndiceVetorial:
     def __init__(self, dimensao: int):
         self.dimensao = dimensao
-        self._ids = []  # posição -> marca_id
+        self._ids = []
         if _TEM_FAISS:
             self._indice = faiss.IndexFlatIP(dimensao)
         else:
@@ -39,7 +30,6 @@ class IndiceVetorial:
         self._ids.append(marca_id)
 
     def buscar(self, embedding: np.ndarray, top_k: int = 5):
-        """Retorna lista de (marca_id, score_similaridade) ordenada decrescente."""
         if len(self._ids) == 0:
             return []
 
@@ -50,7 +40,6 @@ class IndiceVetorial:
             scores, posicoes = self._indice.search(vetor, top_k)
             scores, posicoes = scores[0], posicoes[0]
         else:
-            # embeddings já normalizados -> produto interno == cosseno
             similaridades = (self._matriz @ vetor.T).ravel()
             posicoes = np.argsort(-similaridades)[:top_k]
             scores = similaridades[posicoes]
