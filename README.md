@@ -46,26 +46,29 @@ crescem indefinidamente e nunca "esquecem" o que já foi visto.
 ```bash
 pip install -r requirements.txt
 
-python main.py init
+python -m exlibris init
 
-python main.py add-obra --titulo "Os Lusíadas" --autor "Luís de Camões" \
+python -m exlibris add-obra --titulo "Os Lusíadas" --autor "Luís de Camões" \
     --local "Lisboa" --editora "Antônio Gonçalves" --data "1572"
 
 # Busca sem gravar nada (útil para tentar localizar a obra de uma marca solta)
-python main.py identify --imagem foto_ex_libris.jpg --tipo ex_libris
+python -m exlibris identify --imagem foto_ex_libris.jpg --tipo ex_libris
 
 # Registra a marca e já vincula a uma obra conhecida (ensina o sistema)
-python main.py add-marca --imagem foto_ex_libris.jpg --tipo ex_libris --obra-id 1
+python -m exlibris add-marca --imagem foto_ex_libris.jpg --tipo ex_libris --obra-id 1
 
 # Corrige/confirma o vínculo de uma marca cadastrada anteriormente como "novidade"
-python main.py feedback --marca-id 3 --obra-id 1
+python -m exlibris feedback --marca-id 3 --obra-id 1
 
-python main.py list-obras
+python -m exlibris list-obras
 ```
 
-O `requirements.txt` instala o projeto em modo editável, então os comandos
-legados continuam válidos via `python main.py ...` e `python cli.py ...`.
-Também é possível usar `python -m exlibris ...`.
+O `requirements.txt` instala o projeto em modo editável. Depois da
+instalação, a CLI deve ser executada pelo pacote com
+`python -m exlibris ...`.
+
+Se você acabou de clonar o repositório e ainda não instalou as dependências,
+`python -m exlibris ...` não vai funcionar.
 
 ## Estrutura
 
@@ -76,7 +79,6 @@ Também é possível usar `python -m exlibris ...`.
 - `src/exlibris/infrastructure/persistence/sqlite_catalog.py` — persistência SQLite.
 - `src/exlibris/infrastructure/ml/feature_extractor.py` — extração de embeddings.
 - `src/exlibris/infrastructure/search/vector_index.py` — índice vetorial.
-- `main.py` / `cli.py` na raiz — wrappers de compatibilidade para os comandos atuais.
 
 ## Extensões possíveis
 
