@@ -45,7 +45,6 @@ crescem indefinidamente e nunca "esquecem" o que já foi visto.
 
 ```bash
 pip install -r requirements.txt
-pip install -e .
 
 python main.py init
 
@@ -64,8 +63,9 @@ python main.py feedback --marca-id 3 --obra-id 1
 python main.py list-obras
 ```
 
-Os comandos legados continuam válidos via `python main.py ...` e `python cli.py ...`.
-Depois de instalar o pacote em modo editável, também é possível usar `python -m exlibris ...`.
+O `requirements.txt` instala o projeto em modo editável, então os comandos
+legados continuam válidos via `python main.py ...` e `python cli.py ...`.
+Também é possível usar `python -m exlibris ...`.
 
 ## Estrutura
 
