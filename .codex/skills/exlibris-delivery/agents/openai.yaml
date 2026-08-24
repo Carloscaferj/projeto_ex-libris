@@ -1,0 +1,4 @@
+interface:
+  display_name: "Exlibris Delivery"
+  short_description: "Workflow and shipping conventions"
+  default_prompt: "Use $exlibris-delivery to implement this change using the project's commit, branch, and PR conventions."
