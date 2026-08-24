@@ -1,0 +1,4 @@
+interface:
+  display_name: "Exlibris Architecture"
+  short_description: "Architectural guardrails for Ex Libris"
+  default_prompt: "Use $exlibris-architecture to design or refactor a change without breaking the project's layer boundaries."
