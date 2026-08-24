@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import numpy as np
 
 from exlibris import config
+from exlibris.domain.models import IdentificacaoRegistrada, Marca, Obra
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS obras (
@@ -79,12 +80,12 @@ class SQLiteCatalogRepository:
     def buscar_obra(self, obra_id: int):
         with self.conectar() as con:
             row = con.execute("SELECT * FROM obras WHERE id = ?", (obra_id,)).fetchone()
-            return dict(row) if row else None
+            return self._row_para_obra(row) if row else None
 
     def listar_obras(self):
         with self.conectar() as con:
             rows = con.execute("SELECT * FROM obras ORDER BY id").fetchall()
-            return [dict(r) for r in rows]
+            return [self._row_para_obra(r) for r in rows]
 
     def inserir_marca(self, imagem_path, embedding: np.ndarray, tipo: str, obra_id=None,
                       descricao=None, confirmado: bool = False) -> int:
@@ -107,17 +108,12 @@ class SQLiteCatalogRepository:
     def buscar_marca(self, marca_id: int):
         with self.conectar() as con:
             row = con.execute("SELECT * FROM marcas WHERE id = ?", (marca_id,)).fetchone()
-            return dict(row) if row else None
+            return self._row_para_marca(row) if row else None
 
     def listar_marcas(self):
         with self.conectar() as con:
             rows = con.execute("SELECT * FROM marcas").fetchall()
-        marcas = []
-        for r in rows:
-            d = dict(r)
-            d["embedding"] = np.frombuffer(d["embedding"], dtype=np.float32)
-            marcas.append(d)
-        return marcas
+        return [self._row_para_marca(r) for r in rows]
 
     def registrar_identificacao(self, imagem_path, marca_id_sugerida, obra_id_sugerida,
                                 confianca) -> int:
@@ -135,3 +131,28 @@ class SQLiteCatalogRepository:
                 "UPDATE identificacoes SET aceito = ? WHERE id = ?",
                 (int(aceito), identificacao_id),
             )
+
+    @staticmethod
+    def _row_para_obra(row: sqlite3.Row) -> Obra:
+        return Obra(
+            id=row["id"],
+            titulo=row["titulo"],
+            autor=row["autor"],
+            local=row["local"],
+            editora=row["editora"],
+            data=row["data"],
+            criado_em=row["criado_em"],
+        )
+
+    @staticmethod
+    def _row_para_marca(row: sqlite3.Row) -> Marca:
+        return Marca(
+            id=row["id"],
+            obra_id=row["obra_id"],
+            tipo=row["tipo"],
+            descricao=row["descricao"],
+            imagem_path=row["imagem_path"],
+            embedding=np.frombuffer(row["embedding"], dtype=np.float32),
+            confirmado=bool(row["confirmado"]),
+            criado_em=row["criado_em"],
+        )

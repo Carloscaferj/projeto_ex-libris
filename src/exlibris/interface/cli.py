@@ -6,7 +6,7 @@ import uuid
 from pathlib import Path
 
 from exlibris import config
-from exlibris.application.recognition_service import ObraRecognizer
+from exlibris.application.recognition_service import CatalogRecognitionService
 
 
 def _copiar_para_acervo(imagem_path: str) -> str:
@@ -17,57 +17,60 @@ def _copiar_para_acervo(imagem_path: str) -> str:
 
 
 def cmd_init(args):
-    ObraRecognizer(db_path=args.db)
+    CatalogRecognitionService(db_path=args.db)
     print(f"Banco de dados pronto em: {args.db}")
 
 
 def cmd_add_obra(args):
-    service = ObraRecognizer(db_path=args.db)
+    service = CatalogRecognitionService(db_path=args.db)
     obra_id = service.cadastrar_obra(args.titulo, args.autor, args.local, args.editora, args.data)
     print(f"Obra cadastrada com id={obra_id}: {args.titulo}")
 
 
 def cmd_list_obras(args):
-    service = ObraRecognizer(db_path=args.db)
+    service = CatalogRecognitionService(db_path=args.db)
     for obra in service.listar_obras():
-        print(f"[{obra['id']}] {obra['titulo']} - {obra['autor'] or '?'} "
-              f"({obra['local'] or '?'}, {obra['editora'] or '?'}, {obra['data'] or '?'})")
+        print(f"[{obra.id}] {obra.titulo} - {obra.autor or '?'} "
+              f"({obra.local or '?'}, {obra.editora or '?'}, {obra.data or '?'})")
 
 
 def cmd_identify(args):
-    service = ObraRecognizer(db_path=args.db)
+    service = CatalogRecognitionService(db_path=args.db)
     resultado = service.identificar(args.imagem, tipo=args.tipo, top_k=args.top_k)
 
-    if resultado["novidade"]:
+    if resultado.novidade:
         print("Nenhuma correspondência confiável encontrada - marca possivelmente nova.")
     else:
         print("Marcas semelhantes encontradas:")
-        for v in resultado["vizinhos"]:
-            titulo = v["obra"]["titulo"] if v["obra"] else "(sem obra vinculada)"
-            print(f"  marca={v['marca_id']} tipo={v['tipo']} score={v['score']:.3f} obra={titulo}")
+        for vizinho in resultado.vizinhos:
+            titulo = vizinho.obra.titulo if vizinho.obra else "(sem obra vinculada)"
+            print(
+                f"  marca={vizinho.marca_id} tipo={vizinho.tipo} "
+                f"score={vizinho.score:.3f} obra={titulo}"
+            )
 
     print("\nObras candidatas (para localizar a obra):")
-    if not resultado["obras_candidatas"]:
+    if not resultado.obras_candidatas:
         print("  nenhuma")
-    for c in resultado["obras_candidatas"]:
-        print(f"  score={c['score']:.3f} -> [{c['obra']['id']}] {c['obra']['titulo']}")
+    for candidata in resultado.obras_candidatas:
+        print(f"  score={candidata.score:.3f} -> [{candidata.obra.id}] {candidata.obra.titulo}")
 
     return resultado
 
 
 def cmd_add_marca(args):
-    service = ObraRecognizer(db_path=args.db)
+    service = CatalogRecognitionService(db_path=args.db)
 
     resultado = service.identificar(args.imagem, tipo=args.tipo, top_k=1)
     caminho_salvo = _copiar_para_acervo(args.imagem)
 
     confirmado = bool(args.confirmar or args.obra_id)
     marca_id = service.registrar_marca(
-        caminho_salvo, args.tipo, embedding=resultado["embedding"],
+        caminho_salvo, args.tipo, embedding=resultado.embedding,
         obra_id=args.obra_id, descricao=args.descricao, confirmado=confirmado,
     )
 
-    if resultado["novidade"]:
+    if resultado.novidade:
         print(f"Marca nova registrada (id={marca_id}). ", end="")
     else:
         print(f"Marca registrada (id={marca_id}), semelhante a marcas existentes. ", end="")
@@ -79,7 +82,7 @@ def cmd_add_marca(args):
 
 
 def cmd_feedback(args):
-    service = ObraRecognizer(db_path=args.db)
+    service = CatalogRecognitionService(db_path=args.db)
     service.confirmar_vinculo(args.marca_id, args.obra_id)
     print(f"Marca {args.marca_id} vinculada/confirmada à obra {args.obra_id}. "
           f"Protótipo da obra atualizado.")

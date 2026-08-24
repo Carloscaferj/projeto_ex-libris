@@ -1,3 +1,3 @@
 """Compatibilidade para imports antigos do reconhecedor."""
 
-from exlibris.application.recognition_service import ObraRecognizer
+from exlibris.application.recognition_service import CatalogRecognitionService, ObraRecognizer
