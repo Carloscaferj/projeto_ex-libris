@@ -70,6 +70,18 @@ instalação, a CLI deve ser executada pelo pacote com
 Se você acabou de clonar o repositório e ainda não instalou as dependências,
 `python -m exlibris ...` não vai funcionar.
 
+## Testes
+
+```bash
+pip install -e ".[dev]"
+
+python -m pytest
+```
+
+Os testes usam embeddings sintéticos e bancos SQLite temporários, sem baixar o
+modelo ResNet-50 nem depender do FAISS estar instalado (o backend NumPy é
+usado como fallback automaticamente).
+
 ## Estrutura
 
 - `src/exlibris/config.py` — parâmetros globais do sistema.
