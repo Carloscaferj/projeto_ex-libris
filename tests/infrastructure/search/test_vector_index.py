@@ -4,11 +4,16 @@ Não fazemos nenhuma asserção contra saída real de ResNet aqui — apenas
 vetores construídos à mão onde a ordenação por similaridade é óbvia.
 """
 
+import importlib.util
+
 import numpy as np
 import pytest
 
 from exlibris.domain.models import Marca
+from exlibris.infrastructure.search import vector_index as vector_index_module
 from exlibris.infrastructure.search.vector_index import IndiceVetorial
+
+FAISS_DISPONIVEL = importlib.util.find_spec("faiss") is not None
 
 
 def _marca(id_, embedding, obra_id=None, confirmado=True):
@@ -97,3 +102,30 @@ def test_construir_a_partir_do_banco_inclui_marcas_nao_confirmadas():
     indice = IndiceVetorial.construir_a_partir_do_banco(marcas, dimensao=3)
 
     assert len(indice) == 1
+
+
+def test_buscar_resultado_equivalente_entre_fallback_numpy_e_faiss(monkeypatch):
+    marcas = [
+        _marca(10, [1.0, 0.0, 0.0]),
+        _marca(20, [0.0, 1.0, 0.0]),
+        _marca(30, [0.0, 0.0, 1.0]),
+    ]
+    consulta = np.array([0.1, 0.9, 0.05], dtype=np.float32)
+
+    monkeypatch.setattr(vector_index_module, "_TEM_FAISS", False)
+    indice_numpy = IndiceVetorial.construir_a_partir_do_banco(marcas, dimensao=3)
+    resultado_numpy = indice_numpy.buscar(consulta, top_k=2)
+
+    if not FAISS_DISPONIVEL:
+        pytest.skip("faiss não instalado neste ambiente; backend FAISS não pôde ser comparado")
+
+    monkeypatch.setattr(vector_index_module, "_TEM_FAISS", True)
+    indice_faiss = IndiceVetorial.construir_a_partir_do_banco(marcas, dimensao=3)
+    resultado_faiss = indice_faiss.buscar(consulta, top_k=2)
+
+    ids_numpy = [marca_id for marca_id, _ in resultado_numpy]
+    ids_faiss = [marca_id for marca_id, _ in resultado_faiss]
+    assert ids_numpy == ids_faiss
+
+    for (_, score_numpy), (_, score_faiss) in zip(resultado_numpy, resultado_faiss):
+        assert score_numpy == pytest.approx(score_faiss, abs=1e-5)

@@ -93,6 +93,10 @@ da CLI — sem GPU e sem baixar pesos do modelo. Para rodar a suíte completa,
 incluindo o smoke test do extrator de embeddings que carrega a ResNet-50
 real (baixa pesos na primeira execução), use `pytest`.
 
+Os testes usam embeddings sintéticos e bancos SQLite temporários, sem baixar o
+modelo ResNet-50 nem depender do FAISS estar instalado (o backend NumPy é
+usado como fallback automaticamente) — exceto o smoke test marcado `slow`.
+
 ## Estrutura
 
 - `src/exlibris/config.py` — parâmetros globais do sistema.
