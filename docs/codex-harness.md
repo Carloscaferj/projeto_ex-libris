@@ -1,5 +1,7 @@
 # Codex harness do projeto Ex Libris
 
+> Existe um harness equivalente para o Claude Code em [claude-harness.md](claude-harness.md) (`.claude/skills/` + `.claude/agents/`). Convenções de branch/commit/PR devem ser mantidas iguais nos dois.
+
 Este projeto passa a separar duas coisas:
 
 - `skills`: contexto durável do projeto, reutilizável em várias tarefas.
@@ -32,7 +34,7 @@ Use papéis simples. Não precisa criar um agente diferente para cada detalhe.
 
 ## Padrões de trabalho
 
-- Branches: `codex/<area>-<intent>`
+- Branches no padrão Gitflow: `feature/<area>-<intent>`, `fix/<area>-<intent>`, `hotfix/<area>-<intent>`, `release/<versao>`, `docs/<area>-<intent>`, `refactor/<area>-<intent>`, `test/<area>-<intent>` ou `chore/<area>-<intent>`. Partem de `develop`, exceto `hotfix/*`, que parte de `main`.
 - Commits: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`
 - PRs: devem explicar mudança, motivação, verificação e risco residual
 
