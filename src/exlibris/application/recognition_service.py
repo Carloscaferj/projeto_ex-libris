@@ -1,7 +1,7 @@
 """Serviço de aplicação para reconhecimento e catalogação de obras."""
 
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 
 import numpy as np
 
@@ -15,10 +15,14 @@ from exlibris.infrastructure.search.vector_index import IndiceVetorial
 class CatalogRecognitionService:
     def __init__(self, db_path: str = config.DB_PATH,
                  dimensao: int = config.EMBEDDING_DIM,
-                 limiar_similaridade: float = config.SIMILARITY_THRESHOLD):
+                 limiar_similaridade: float = config.SIMILARITY_THRESHOLD,
+                 repository: SQLiteCatalogRepository | None = None,
+                 extrator_embedding: Callable[[str], np.ndarray] = extrair_embedding,
+                 indice: IndiceVetorial | None = None):
         self.db_path = db_path
         self.limiar = limiar_similaridade
-        self._repository = SQLiteCatalogRepository(db_path)
+        self._repository = repository if repository is not None else SQLiteCatalogRepository(db_path)
+        self._extrator_embedding = extrator_embedding
         self._repository.iniciar_banco()
 
         self._marcas_por_id: dict[int, Marca] = {}
@@ -26,7 +30,7 @@ class CatalogRecognitionService:
         self._contagem_prototipo = defaultdict(int)
 
         marcas = self._repository.listar_marcas()
-        self._indice = IndiceVetorial.construir_a_partir_do_banco(marcas, dimensao)
+        self._indice = indice if indice is not None else IndiceVetorial.construir_a_partir_do_banco(marcas, dimensao)
         for marca in marcas:
             self._marcas_por_id[marca.id] = marca
             if marca.obra_id and marca.confirmado:
@@ -46,7 +50,7 @@ class CatalogRecognitionService:
         pontos = defaultdict(float)
         for marca_id, score in vizinhos:
             marca = self._marcas_por_id[marca_id]
-            if marca.obra_id:
+            if marca.obra_id and marca.confirmado:
                 pontos[marca.obra_id] = max(pontos[marca.obra_id], score)
 
         for obra_id, prototipo in self._prototipos.items():
@@ -68,8 +72,15 @@ class CatalogRecognitionService:
         self, imagem_path: str, tipo: MarcaTipo | None = None,
         top_k: int = config.TOP_K_PADRAO
     ) -> ResultadoIdentificacao:
-        embedding = extrair_embedding(imagem_path)
-        vizinhos_brutos = self._indice.buscar(embedding, top_k=top_k)
+        embedding = self._extrator_embedding(imagem_path)
+
+        pool = len(self._indice) if tipo is not None else top_k
+        vizinhos_brutos = self._indice.buscar(embedding, top_k=pool)
+        if tipo is not None:
+            vizinhos_brutos = [
+                (marca_id, score) for marca_id, score in vizinhos_brutos
+                if self._marcas_por_id[marca_id].tipo == tipo
+            ][:top_k]
 
         vizinhos: list[MarcaVizinha] = []
         for marca_id, score in vizinhos_brutos:
@@ -105,7 +116,7 @@ class CatalogRecognitionService:
                         obra_id: int | None = None, descricao: str | None = None,
                         confirmado: bool = False) -> int:
         if embedding is None:
-            embedding = extrair_embedding(imagem_path)
+            embedding = self._extrator_embedding(imagem_path)
 
         marca_id = self._repository.inserir_marca(
             imagem_path, embedding, tipo, obra_id, descricao, confirmado
@@ -120,12 +131,18 @@ class CatalogRecognitionService:
         return marca_id
 
     def confirmar_vinculo(self, marca_id: int, obra_id: int) -> None:
+        marca_atual = self._marcas_por_id.get(marca_id)
+        ja_contribuiu = bool(
+            marca_atual and marca_atual.confirmado and marca_atual.obra_id == obra_id
+        )
+
         self._repository.atualizar_vinculo_marca(marca_id, obra_id, confirmado=True)
         marca = self._repository.buscar_marca(marca_id)
-        embedding = marca.embedding
         self._marcas_por_id[marca_id].obra_id = obra_id
         self._marcas_por_id[marca_id].confirmado = True
-        self._atualizar_prototipo(obra_id, embedding)
+
+        if not ja_contribuiu:
+            self._atualizar_prototipo(obra_id, marca.embedding)
 
 
 ObraRecognizer = CatalogRecognitionService
