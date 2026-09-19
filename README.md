@@ -5,6 +5,12 @@ identificar, a partir de uma foto de uma marca de proveniência ou de um
 ex-libris, a qual obra catalogada ela pertence — aprendendo com cada nova
 leitura.
 
+O contrato de domínio do MVP (obra, exemplar e marca, fluxo de curadoria,
+campos obrigatórios e roteiro de homologação) está registrado em
+[docs/contrato-mvp.md](docs/contrato-mvp.md). O domínio atual descrito abaixo
+ainda não tem o conceito de exemplar físico — essa mudança de esquema fica
+para uma issue de migração futura.
+
 ## Como funciona
 
 1. **Extração de características** (`src/exlibris/infrastructure/ml/feature_extractor.py`): cada imagem de
