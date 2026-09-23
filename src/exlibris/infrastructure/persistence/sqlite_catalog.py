@@ -8,6 +8,7 @@ import numpy as np
 
 from exlibris import config
 from exlibris.domain.models import IdentificacaoRegistrada, Marca, Obra
+from exlibris.infrastructure.persistence import migrations
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS obras (
@@ -17,7 +18,8 @@ CREATE TABLE IF NOT EXISTS obras (
     local       TEXT,
     editora     TEXT,
     data        TEXT,
-    criado_em   TEXT NOT NULL
+    criado_em   TEXT NOT NULL,
+    teste       TEXT
 );
 
 CREATE TABLE IF NOT EXISTS marcas (
@@ -44,7 +46,6 @@ CREATE TABLE IF NOT EXISTS identificacoes (
 CREATE INDEX IF NOT EXISTS idx_marcas_obra ON marcas(obra_id);
 """
 
-
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -66,7 +67,58 @@ class SQLiteCatalogRepository:
 
     def iniciar_banco(self) -> None:
         with self.conectar() as con:
-            con.executescript(SCHEMA)
+            db_test = con.execute(
+                 "SELECT name FROM sqlite_master WHERE type='table' AND name='obras';"
+            )
+            db_exists = db_test.fetchone() is not None
+
+            if db_exists:
+                db_ver_test = con.execute(
+                    "PRAGMA user_version;"
+                )
+                db_ver = db_ver_test.fetchone()[0]
+                if db_ver == migrations.SCHEMA_VERSION:
+                    return
+                else:
+                    self.update_schema(db_ver)
+                    return
+            else:
+                con.executescript(SCHEMA)
+                con.execute(f"PRAGMA user_version = {migrations.SCHEMA_VERSION};")
+                return
+
+    def update_schema(self, db_ver: int) -> None:
+        backup_path = f"{self.db_path}.bak"
+        con_origem = sqlite3.connect(self.db_path)
+        con_backup = sqlite3.connect(backup_path)
+        con_origem.backup(con_backup)
+        con_origem.close()
+        con_backup.close()
+
+        try:
+
+            with self.conectar() as con:
+                for versao, sql in migrations.MIGRATIONS:
+                    if versao > db_ver:
+                        con.executescript(sql)
+                con.execute(f"PRAGMA user_version = {migrations.SCHEMA_VERSION};")
+
+                integrity = con.execute("PRAGMA integrity_check;").fetchone()[0] == "ok"
+                keys_ok = con.execute("PRAGMA foreign_key_check;").fetchall() == []
+
+                if not integrity:
+                    raise RuntimeError("Integridade comprometida, restaurando backup...")
+                elif not keys_ok:
+                    raise RuntimeError("Dados comprometidos, restaurando backup...")
+
+        except Exception:
+            con_backup = sqlite3.connect(backup_path)
+            con_restaurado = sqlite3.connect(self.db_path)
+            con_backup.backup(con_restaurado)
+            con_backup.close()
+            con_restaurado.close()
+            raise
+
 
     def inserir_obra(self, titulo, autor=None, local=None, editora=None, data=None) -> int:
         with self.conectar() as con:

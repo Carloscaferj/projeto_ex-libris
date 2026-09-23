@@ -55,5 +55,5 @@ class IndiceVetorial:
     def construir_a_partir_do_banco(cls, marcas: list, dimensao: int) -> "IndiceVetorial":
         indice = cls(dimensao)
         for marca in marcas:
-            indice.adicionar(marca["id"], marca["embedding"])
+            indice.adicionar(marca.id, marca.embedding)
         return indice

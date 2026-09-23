@@ -2,7 +2,8 @@
 
 ## Fluxo de trabalho
 
-- Use branches curtas com o padrão `codex/<area>-<intent>`.
+- Use branches curtas no padrão Gitflow: `feature/<area>-<intent>`, `fix/<area>-<intent>`, `hotfix/<area>-<intent>`, `release/<versao>`, `docs/<area>-<intent>`, `refactor/<area>-<intent>`, `test/<area>-<intent>` ou `chore/<area>-<intent>`.
+- Branches partem de `develop` (exceto `hotfix/*`, que parte de `main`).
 - Mantenha cada alteração focada em um único objetivo sempre que possível.
 - Atualize documentação quando a mudança afetar CLI, arquitetura, setup ou comportamento funcional.
 

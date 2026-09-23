@@ -5,6 +5,12 @@ identificar, a partir de uma foto de uma marca de proveniência ou de um
 ex-libris, a qual obra catalogada ela pertence — aprendendo com cada nova
 leitura.
 
+O contrato de domínio do MVP (obra, exemplar e marca, fluxo de curadoria,
+campos obrigatórios e roteiro de homologação) está registrado em
+[docs/contrato-mvp.md](docs/contrato-mvp.md). O domínio atual descrito abaixo
+ainda não tem o conceito de exemplar físico — essa mudança de esquema fica
+para uma issue de migração futura.
+
 ## Como funciona
 
 1. **Extração de características** (`src/exlibris/infrastructure/ml/feature_extractor.py`): cada imagem de
@@ -69,6 +75,27 @@ instalação, a CLI deve ser executada pelo pacote com
 
 Se você acabou de clonar o repositório e ainda não instalou as dependências,
 `python -m exlibris ...` não vai funcionar.
+
+## Testes
+
+Em uma instalação limpa (Python 3.10+):
+
+```bash
+pip install -e ".[dev]"
+
+pytest -m "not slow"
+```
+
+`pytest -m "not slow"` roda a suíte usada no CI: testes de domínio,
+aplicação (com embeddings sintéticos, sem carregar o modelo real),
+persistência SQLite (arquivo temporário) e um smoke test de ponta a ponta
+da CLI — sem GPU e sem baixar pesos do modelo. Para rodar a suíte completa,
+incluindo o smoke test do extrator de embeddings que carrega a ResNet-50
+real (baixa pesos na primeira execução), use `pytest`.
+
+Os testes usam embeddings sintéticos e bancos SQLite temporários, sem baixar o
+modelo ResNet-50 nem depender do FAISS estar instalado (o backend NumPy é
+usado como fallback automaticamente) — exceto o smoke test marcado `slow`.
 
 ## Estrutura
 
