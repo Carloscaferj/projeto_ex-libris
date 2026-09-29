@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from exlibris.domain.errors import ImagemInvalida
 from exlibris.infrastructure.ml.feature_extractor import extrair_embedding
 
 
@@ -23,3 +24,20 @@ def test_extrair_embedding_retorna_vetor_l2_normalizado(tmp_path):
     assert embedding.dtype == np.float32
     assert embedding.shape == (2048,)
     assert np.linalg.norm(embedding) == pytest.approx(1.0, abs=1e-3)
+
+
+# --- validação de imagem: não carrega o modelo, roda no CI padrão ---------------
+
+def test_extrair_embedding_com_arquivo_corrompido_gera_imagem_invalida(tmp_path):
+    imagem_path = tmp_path / "corrompida.jpg"
+    imagem_path.write_bytes(b"isto nao e uma imagem valida")
+
+    with pytest.raises(ImagemInvalida):
+        extrair_embedding(str(imagem_path))
+
+
+def test_extrair_embedding_com_arquivo_inexistente_gera_imagem_invalida(tmp_path):
+    imagem_path = tmp_path / "nao-existe.jpg"
+
+    with pytest.raises(ImagemInvalida):
+        extrair_embedding(str(imagem_path))

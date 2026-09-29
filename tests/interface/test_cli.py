@@ -13,6 +13,7 @@ import pytest
 
 from exlibris import config
 from exlibris.application.recognition_service import CatalogRecognitionService
+from exlibris.domain.errors import ObraNaoEncontrada, TituloInvalido
 from exlibris.domain.models import MarcaVizinha, ObraCandidata, Obra, ResultadoIdentificacao
 from exlibris.interface import cli
 
@@ -226,3 +227,48 @@ def test_caminho_feliz_de_ponta_a_ponta_sem_carregar_modelo_real(tmp_path, monke
 
     cli.main(["--db", db_path, "list-obras"])
     assert "Os Lusíadas" in capsys.readouterr().out
+
+
+# --- mapeamento de erros de domínio para saída e código de processo ------------
+
+def test_main_imprime_erro_de_validacao_em_stderr_e_sai_com_codigo_proprio(monkeypatch, capsys):
+    class ServicoInvalido:
+        def __init__(self, db_path):
+            pass
+
+        def cadastrar_obra(self, *args, **kwargs):
+            raise TituloInvalido("O título da obra não pode ser vazio.")
+
+    monkeypatch.setattr(cli, "CatalogRecognitionService", ServicoInvalido)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main(["add-obra", "--titulo", "   "])
+
+    assert exc_info.value.code == cli.CODIGOS_DE_SAIDA["validacao"]
+    assert "não pode ser vazio" in capsys.readouterr().err
+
+
+def test_main_mapeia_erro_nao_encontrado_para_codigo_de_saida_proprio(monkeypatch, capsys):
+    class ServicoInvalido:
+        def __init__(self, db_path):
+            pass
+
+        def confirmar_vinculo(self, marca_id, obra_id):
+            raise ObraNaoEncontrada(f"Obra {obra_id} não encontrada.")
+
+    monkeypatch.setattr(cli, "CatalogRecognitionService", ServicoInvalido)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main(["feedback", "--marca-id", "1", "--obra-id", "999"])
+
+    saida = capsys.readouterr()
+    assert exc_info.value.code == cli.CODIGOS_DE_SAIDA["nao_encontrado"]
+    assert "não encontrada" in saida.err
+
+
+def test_add_marca_nao_aceita_mais_a_flag_confirmar(fake_service):
+    # `--confirmar` sem `--obra-id` permitia criar uma marca confirmada sem
+    # vínculo, um estado que o contrato de domínio agora proíbe (issue #9) —
+    # a flag foi removida da CLI em vez de sempre falhar em tempo de execução.
+    with pytest.raises(SystemExit):
+        cli.main(["add-marca", "--imagem", "foto.jpg", "--tipo", "ex_libris", "--confirmar"])

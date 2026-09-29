@@ -8,6 +8,16 @@ pequenos com distâncias conhecidas.
 import numpy as np
 import pytest
 
+from exlibris.domain.errors import (
+    EmbeddingInvalido,
+    MarcaNaoEncontrada,
+    ObraNaoEncontrada,
+    TipoMarcaInvalido,
+    TituloInvalido,
+    TopKInvalido,
+    VinculoInvalido,
+)
+
 
 # --- cadastro básico de obras -------------------------------------------------
 
@@ -271,3 +281,148 @@ def test_novidade_e_false_acima_do_limiar(fake_extrator, make_service):
     resultado = service.identificar("igual.jpg")
 
     assert resultado.novidade is False
+
+
+# --- validação: cadastrar_obra ----------------------------------------------------
+
+def test_cadastrar_obra_com_titulo_vazio_e_rejeitado_sem_gravar(fake_repository, make_service):
+    service = make_service(repository=fake_repository)
+
+    with pytest.raises(TituloInvalido):
+        service.cadastrar_obra("   ")
+
+    assert service.listar_obras() == []
+
+
+# --- validação: identificar --------------------------------------------------------
+
+def test_identificar_com_tipo_invalido_e_rejeitado(fake_extrator, make_service):
+    service = make_service()
+    fake_extrator.registrar("foto.jpg", [1.0, 0.0, 0.0])
+
+    with pytest.raises(TipoMarcaInvalido):
+        service.identificar("foto.jpg", tipo="nao-existe")
+
+
+@pytest.mark.parametrize("top_k", [0, -1])
+def test_identificar_com_top_k_nao_positivo_e_rejeitado(top_k, fake_extrator, make_service):
+    service = make_service()
+    fake_extrator.registrar("foto.jpg", [1.0, 0.0, 0.0])
+
+    with pytest.raises(TopKInvalido):
+        service.identificar("foto.jpg", top_k=top_k)
+
+
+def test_identificar_com_top_k_acima_do_limite_e_rejeitado(fake_extrator, make_service):
+    service = make_service()
+    fake_extrator.registrar("foto.jpg", [1.0, 0.0, 0.0])
+
+    with pytest.raises(TopKInvalido):
+        service.identificar("foto.jpg", top_k=1_000_000)
+
+
+def test_identificar_com_embedding_de_dimensao_incompativel_e_rejeitado(
+    fake_extrator, make_service
+):
+    service = make_service(dimensao=3)
+    fake_extrator.registrar("foto.jpg", [1.0, 0.0])  # dimensão 2, serviço espera 3
+
+    with pytest.raises(EmbeddingInvalido):
+        service.identificar("foto.jpg")
+
+
+def test_identificar_com_embedding_nulo_nao_registra_identificacao(
+    fake_repository, fake_extrator, make_service
+):
+    service = make_service(repository=fake_repository)
+    fake_extrator.registrar("foto.jpg", [0.0, 0.0, 0.0])
+
+    with pytest.raises(EmbeddingInvalido):
+        service.identificar("foto.jpg")
+
+    assert fake_repository.identificacoes == []
+
+
+# --- validação: registrar_marca ----------------------------------------------------
+
+def test_registrar_marca_com_tipo_invalido_e_rejeitado_sem_gravar(fake_repository, make_service):
+    service = make_service(repository=fake_repository)
+
+    with pytest.raises(TipoMarcaInvalido):
+        service.registrar_marca(
+            "foto.jpg", "nao-existe", embedding=np.array([1.0, 0.0, 0.0], dtype=np.float32),
+        )
+
+    assert fake_repository.listar_marcas() == []
+
+
+def test_registrar_marca_confirmada_sem_obra_e_rejeitada_sem_gravar(fake_repository, make_service):
+    service = make_service(repository=fake_repository)
+
+    with pytest.raises(VinculoInvalido):
+        service.registrar_marca(
+            "foto.jpg", "ex_libris",
+            embedding=np.array([1.0, 0.0, 0.0], dtype=np.float32),
+            confirmado=True,
+        )
+
+    assert fake_repository.listar_marcas() == []
+
+
+def test_registrar_marca_com_obra_inexistente_e_rejeitada_sem_gravar(fake_repository, make_service):
+    service = make_service(repository=fake_repository)
+
+    with pytest.raises(ObraNaoEncontrada):
+        service.registrar_marca(
+            "foto.jpg", "ex_libris",
+            embedding=np.array([1.0, 0.0, 0.0], dtype=np.float32),
+            obra_id=999, confirmado=True,
+        )
+
+    assert fake_repository.listar_marcas() == []
+
+
+def test_registrar_marca_com_embedding_de_dimensao_incompativel_e_rejeitada(
+    fake_repository, make_service
+):
+    service = make_service(dimensao=3, repository=fake_repository)
+
+    with pytest.raises(EmbeddingInvalido):
+        service.registrar_marca(
+            "foto.jpg", "ex_libris", embedding=np.array([1.0, 0.0], dtype=np.float32),
+        )
+
+    assert fake_repository.listar_marcas() == []
+
+
+def test_registrar_marca_com_embedding_nulo_e_rejeitada(fake_repository, make_service):
+    service = make_service(repository=fake_repository)
+
+    with pytest.raises(EmbeddingInvalido):
+        service.registrar_marca(
+            "foto.jpg", "ex_libris", embedding=np.zeros(3, dtype=np.float32),
+        )
+
+    assert fake_repository.listar_marcas() == []
+
+
+# --- validação: confirmar_vinculo --------------------------------------------------
+
+def test_confirmar_vinculo_com_marca_inexistente_e_rejeitado(make_service):
+    service = make_service()
+    obra_id = service.cadastrar_obra("Obra")
+
+    with pytest.raises(MarcaNaoEncontrada):
+        service.confirmar_vinculo(999, obra_id)
+
+
+def test_confirmar_vinculo_com_obra_inexistente_nao_altera_a_marca(fake_extrator, make_service):
+    service = make_service()
+    fake_extrator.registrar("m.jpg", [1.0, 0.0, 0.0])
+    marca_id = service.registrar_marca("m.jpg", "ex_libris", embedding=fake_extrator("m.jpg"))
+
+    with pytest.raises(ObraNaoEncontrada):
+        service.confirmar_vinculo(marca_id, 999)
+
+    assert service._marcas_por_id[marca_id].confirmado is False
+    assert service._marcas_por_id[marca_id].obra_id is None

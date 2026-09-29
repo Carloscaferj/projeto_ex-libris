@@ -21,4 +21,9 @@ SIMILARITY_THRESHOLD = 0.75
 # Número de vizinhos mais próximos retornados nas buscas.
 TOP_K_PADRAO = 5
 
+# Limite superior de vizinhos que uma busca pode pedir. Protege contra
+# valores de top_k arbitrariamente grandes vindos de chamadas diretas ao
+# serviço (a CLI nunca passa disso, mas o serviço não confia só na CLI).
+TOP_K_MAXIMO = 50
+
 DEVICE = os.environ.get("RECONHECIMENTO_DEVICE", "auto")
