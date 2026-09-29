@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import numpy as np
 
 from exlibris import config
+from exlibris.domain.errors import ErroConflito, ErroInfraestrutura
 from exlibris.domain.models import IdentificacaoRegistrada, Marca, Obra
 
 SCHEMA = """
@@ -61,6 +62,16 @@ class SQLiteCatalogRepository:
         try:
             yield con
             con.commit()
+        except sqlite3.IntegrityError as erro:
+            con.rollback()
+            raise ErroConflito(
+                "A operação viola uma restrição de integridade do catálogo."
+            ) from erro
+        except sqlite3.Error as erro:
+            con.rollback()
+            raise ErroInfraestrutura(
+                "Falha ao acessar o banco de dados do catálogo."
+            ) from erro
         finally:
             con.close()
 

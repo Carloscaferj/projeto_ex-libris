@@ -3,9 +3,10 @@
 import threading
 
 import numpy as np
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 
 from exlibris import config
+from exlibris.domain.errors import ImagemInvalida
 
 _lock = threading.Lock()
 _modelo = None
@@ -46,11 +47,18 @@ def extrair_embedding(imagem_path: str) -> np.ndarray:
     """Retorna o embedding L2-normalizado (float32, shape=(EMBEDDING_DIM,))."""
     import torch
 
-    _carregar_modelo()
+    # Valida a imagem antes de carregar o modelo (evita baixar pesos/gastar
+    # inferência para depois descobrir que a entrada é inválida).
+    try:
+        with Image.open(imagem_path) as img:
+            imagem_rgb = img.convert("RGB")
+    except (FileNotFoundError, UnidentifiedImageError, OSError) as erro:
+        raise ImagemInvalida(
+            f"Não foi possível ler a imagem em {imagem_path!r}."
+        ) from erro
 
-    with Image.open(imagem_path) as img:
-        img = img.convert("RGB")
-        tensor = _transform(img).unsqueeze(0).to(_device)
+    _carregar_modelo()
+    tensor = _transform(imagem_rgb).unsqueeze(0).to(_device)
 
     with torch.no_grad():
         vetor = _modelo(tensor).squeeze(0).cpu().numpy().astype(np.float32)

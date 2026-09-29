@@ -6,7 +6,15 @@ from collections.abc import Callable, Iterable
 import numpy as np
 
 from exlibris import config
+from exlibris.domain.errors import MarcaNaoEncontrada, ObraNaoEncontrada
 from exlibris.domain.models import Marca, MarcaTipo, MarcaVizinha, ObraCandidata, ResultadoIdentificacao
+from exlibris.domain.validation import (
+    validar_embedding,
+    validar_tipo_marca,
+    validar_titulo,
+    validar_top_k,
+    validar_vinculo_confirmado,
+)
 from exlibris.infrastructure.ml.feature_extractor import extrair_embedding
 from exlibris.infrastructure.persistence.sqlite_catalog import SQLiteCatalogRepository
 from exlibris.infrastructure.search.vector_index import IndiceVetorial
@@ -63,6 +71,7 @@ class CatalogRecognitionService:
         return pontos
 
     def cadastrar_obra(self, titulo, autor=None, local=None, editora=None, data=None) -> int:
+        titulo = validar_titulo(titulo)
         return self._repository.inserir_obra(titulo, autor, local, editora, data)
 
     def listar_obras(self):
@@ -72,7 +81,12 @@ class CatalogRecognitionService:
         self, imagem_path: str, tipo: MarcaTipo | None = None,
         top_k: int = config.TOP_K_PADRAO
     ) -> ResultadoIdentificacao:
+        if tipo is not None:
+            tipo = validar_tipo_marca(tipo)
+        top_k = validar_top_k(top_k, config.TOP_K_MAXIMO)
+
         embedding = self._extrator_embedding(imagem_path)
+        embedding = validar_embedding(embedding, self._indice.dimensao)
 
         pool = len(self._indice) if tipo is not None else top_k
         vizinhos_brutos = self._indice.buscar(embedding, top_k=pool)
@@ -115,8 +129,14 @@ class CatalogRecognitionService:
                         embedding: np.ndarray | None = None,
                         obra_id: int | None = None, descricao: str | None = None,
                         confirmado: bool = False) -> int:
+        tipo = validar_tipo_marca(tipo)
+        validar_vinculo_confirmado(obra_id, confirmado)
+        if obra_id is not None and self._repository.buscar_obra(obra_id) is None:
+            raise ObraNaoEncontrada(f"Obra {obra_id} não encontrada.")
+
         if embedding is None:
             embedding = self._extrator_embedding(imagem_path)
+        embedding = validar_embedding(embedding, self._indice.dimensao)
 
         marca_id = self._repository.inserir_marca(
             imagem_path, embedding, tipo, obra_id, descricao, confirmado
@@ -132,9 +152,12 @@ class CatalogRecognitionService:
 
     def confirmar_vinculo(self, marca_id: int, obra_id: int) -> None:
         marca_atual = self._marcas_por_id.get(marca_id)
-        ja_contribuiu = bool(
-            marca_atual and marca_atual.confirmado and marca_atual.obra_id == obra_id
-        )
+        if marca_atual is None:
+            raise MarcaNaoEncontrada(f"Marca {marca_id} não encontrada.")
+        if self._repository.buscar_obra(obra_id) is None:
+            raise ObraNaoEncontrada(f"Obra {obra_id} não encontrada.")
+
+        ja_contribuiu = bool(marca_atual.confirmado and marca_atual.obra_id == obra_id)
 
         self._repository.atualizar_vinculo_marca(marca_id, obra_id, confirmado=True)
         marca = self._repository.buscar_marca(marca_id)

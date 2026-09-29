@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 
+from exlibris.domain.errors import ErroConflito
 from exlibris.infrastructure.persistence.sqlite_catalog import SQLiteCatalogRepository
 
 
@@ -63,8 +64,17 @@ def test_inserir_marca_default_nao_confirmado_e_sem_obra(repo):
 
 
 def test_inserir_marca_com_tipo_invalido_e_rejeitada_pelo_schema(repo):
-    with pytest.raises(Exception):
+    with pytest.raises(ErroConflito):
         repo.inserir_marca("marca.jpg", np.zeros(3, dtype=np.float32), "tipo_invalido")
+
+
+def test_inserir_marca_com_obra_id_inexistente_e_rejeitada_como_conflito(repo):
+    with pytest.raises(ErroConflito):
+        repo.inserir_marca(
+            "marca.jpg", np.zeros(3, dtype=np.float32), "ex_libris", obra_id=999,
+        )
+
+    assert repo.listar_marcas() == []
 
 
 def test_atualizar_vinculo_marca_confirma_e_associa_obra(repo):

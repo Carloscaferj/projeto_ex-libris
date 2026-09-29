@@ -2,11 +2,22 @@
 
 import argparse
 import shutil
+import sys
 import uuid
 from pathlib import Path
 
 from exlibris import config
 from exlibris.application.recognition_service import CatalogRecognitionService
+from exlibris.domain.errors import ExLibrisError
+
+# Código de saída do processo por categoria de erro de negócio — o mesmo
+# `codigo` estável que uma futura API HTTP mapearia para um status.
+CODIGOS_DE_SAIDA = {
+    "validacao": 2,
+    "nao_encontrado": 3,
+    "conflito": 4,
+    "infraestrutura": 5,
+}
 
 
 def _copiar_para_acervo(imagem_path: str) -> str:
@@ -64,7 +75,7 @@ def cmd_add_marca(args):
     resultado = service.identificar(args.imagem, tipo=args.tipo, top_k=1)
     caminho_salvo = _copiar_para_acervo(args.imagem)
 
-    confirmado = bool(args.confirmar or args.obra_id)
+    confirmado = bool(args.obra_id)
     marca_id = service.registrar_marca(
         caminho_salvo, args.tipo, embedding=resultado.embedding,
         obra_id=args.obra_id, descricao=args.descricao, confirmado=confirmado,
@@ -120,8 +131,6 @@ def construir_parser():
     p.add_argument("--tipo", required=True, choices=["ex_libris", "proveniencia", "outro"])
     p.add_argument("--obra-id", type=int, help="Vincula diretamente a uma obra já cadastrada")
     p.add_argument("--descricao")
-    p.add_argument("--confirmar", action="store_true",
-                   help="Marca como confirmada mesmo sem --obra-id (uso avançado)")
     p.set_defaults(func=cmd_add_marca)
 
     p = sub.add_parser("feedback", help="Confirma/corrige o vínculo de uma marca a uma obra")
@@ -135,4 +144,8 @@ def construir_parser():
 def main(argv=None):
     parser = construir_parser()
     args = parser.parse_args(argv)
-    args.func(args)
+    try:
+        args.func(args)
+    except ExLibrisError as erro:
+        print(f"Erro: {erro}", file=sys.stderr)
+        sys.exit(CODIGOS_DE_SAIDA.get(erro.codigo, 1))

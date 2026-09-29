@@ -97,12 +97,32 @@ Os testes usam embeddings sintéticos e bancos SQLite temporários, sem baixar o
 modelo ResNet-50 nem depender do FAISS estar instalado (o backend NumPy é
 usado como fallback automaticamente) — exceto o smoke test marcado `slow`.
 
+## Erros
+
+Os casos de uso do serviço (`CatalogRecognitionService`) validam a entrada
+*antes* de qualquer gravação e sinalizam problemas com a taxonomia estável de
+`src/exlibris/domain/errors.py` — nunca com exceções de SQLite ou Pillow.
+Isso vale tanto para a CLI quanto para quem chama o serviço diretamente.
+
+| Categoria (`codigo`) | Quando ocorre | Exemplos |
+|---|---|---|
+| `validacao` | Entrada rejeitada antes de qualquer efeito colateral | título vazio, tipo de marca inválido, `top_k` não positivo ou acima do limite, embedding com dimensão/valores/norma inválidos, marca confirmada sem vínculo, imagem corrompida/ilegível |
+| `nao_encontrado` | Referência a um id que não existe no catálogo | `obra_id`/`marca_id` inexistente em `add-marca`/`feedback` |
+| `conflito` | O estado atual do catálogo impede a operação | violação de restrição de integridade do banco |
+| `infraestrutura` | Falha ao acessar SQLite ou o sistema de arquivos | erro de I/O no banco de dados |
+
+A CLI (`src/exlibris/interface/cli.py`) imprime a mensagem em `stderr` e
+encerra com um código de saída por categoria (`CODIGOS_DE_SAIDA`), pensado
+para ser reaproveitado por uma futura API HTTP como status code.
+
 ## Estrutura
 
 - `src/exlibris/config.py` — parâmetros globais do sistema.
 - `src/exlibris/interface/cli.py` — interface de linha de comando.
 - `src/exlibris/application/recognition_service.py` — fluxo principal da aplicação.
 - `src/exlibris/domain/models.py` — modelos tipados do domínio.
+- `src/exlibris/domain/errors.py` — taxonomia estável de erros dos casos de uso.
+- `src/exlibris/domain/validation.py` — validação de entrada dos casos de uso.
 - `src/exlibris/infrastructure/persistence/sqlite_catalog.py` — persistência SQLite.
 - `src/exlibris/infrastructure/ml/feature_extractor.py` — extração de embeddings.
 - `src/exlibris/infrastructure/search/vector_index.py` — índice vetorial.
