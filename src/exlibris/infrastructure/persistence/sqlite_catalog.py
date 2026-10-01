@@ -105,6 +105,16 @@ class SQLiteCatalogRepository:
                 (obra_id, int(confirmado), marca_id),
             )
 
+    def remover_marca(self, marca_id: int) -> None: 
+        # Essa função serve para apoiar a remoção no application/recognition_service.
+        # Portano, se quiser remover uma marca, remova por lá para evitar erros.
+        self.atualizar_vinculo_marca(marca_id, obra_id=None, confirmado=False)
+        with self.conectar() as con:
+            cur = con.execute(
+                "DELETE FROM marcas WHERE id = ?;",
+                (marca_id,)
+            )
+
     def buscar_marca(self, marca_id: int):
         with self.conectar() as con:
             row = con.execute("SELECT * FROM marcas WHERE id = ?", (marca_id,)).fetchone()
@@ -113,6 +123,14 @@ class SQLiteCatalogRepository:
     def listar_marcas(self):
         with self.conectar() as con:
             rows = con.execute("SELECT * FROM marcas").fetchall()
+        return [self._row_para_marca(r) for r in rows]
+
+    def listar_marcas_confirmadas_por_obra(self, obra_id: int):
+        with self.conectar() as con:
+            rows = con.execute(
+                "SELECT * FROM marcas WHERE obra_id = ? AND confirmado = 1 ORDER BY id;",
+                (obra_id,)
+            ).fetchall()
         return [self._row_para_marca(r) for r in rows]
 
     def registrar_identificacao(self, imagem_path, marca_id_sugerida, obra_id_sugerida,

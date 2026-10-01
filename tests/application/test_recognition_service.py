@@ -271,3 +271,97 @@ def test_novidade_e_false_acima_do_limiar(fake_extrator, make_service):
     resultado = service.identificar("igual.jpg")
 
     assert resultado.novidade is False
+
+    # Outros
+
+def test_prototipo_e_independente_da_ordem_de_confirmacao(fake_extrator, make_service):
+    service = make_service(limiar_similaridade=0.5)
+    obra_id = service.cadastrar_obra("Obra")
+
+    fake_extrator.registrar("m1.jpg", [1.0, 0.0, 0.0])
+    fake_extrator.registrar("m2.jpg", [0.0, 1.0, 0.0])
+
+    marca1_id = service.registrar_marca(
+        "m1.jpg", "ex_libris", embedding=fake_extrator("m1.jpg"),
+        obra_id=obra_id, confirmado=True,
+    )
+    marca2_id = service.registrar_marca(
+        "m2.jpg", "ex_libris", embedding=fake_extrator("m2.jpg"),
+        obra_id=obra_id, confirmado=True,
+    )
+
+    soma = service._prototipos[obra_id]
+    n = service._contagem_prototipo[obra_id]
+
+    soma_esperada = np.array([1.0, 1.0, 0.0], dtype=np.float32)
+    assert n == 2
+    np.testing.assert_allclose(soma, soma_esperada)
+
+def test_confirmar_vinculo_com_obra_diferente_remove_contribuicao_da_obra_antiga(
+    fake_extrator, make_service
+):
+    service = make_service(limiar_similaridade=0.5)
+    obra_a = service.cadastrar_obra("Obra A")
+    obra_b = service.cadastrar_obra("Obra B")
+
+    fake_extrator.registrar("m.jpg", [1.0, 0.0, 0.0])
+    marca_id = service.registrar_marca("m.jpg", "ex_libris", embedding=fake_extrator("m.jpg"))
+
+    service.confirmar_vinculo(marca_id, obra_a)
+    assert service._contagem_prototipo[obra_a] == 1
+    np.testing.assert_allclose(service._prototipos[obra_a], [1.0, 0.0, 0.0])
+
+    service.confirmar_vinculo(marca_id, obra_b)
+
+    # obra_a deve voltar a zero — nenhuma marca confirmada restante
+    assert service._contagem_prototipo[obra_a] == 0
+    np.testing.assert_allclose(service._prototipos[obra_a], [0.0, 0.0, 0.0])
+
+    # obra_b ganhou a contribuição
+    assert service._contagem_prototipo[obra_b] == 1
+    np.testing.assert_allclose(service._prototipos[obra_b], [1.0, 0.0, 0.0])
+
+def test_conferir_prototipo_obra_detecta_consistencia(fake_extrator, make_service):
+    service = make_service(limiar_similaridade=0.5)
+    obra_id = service.cadastrar_obra("Obra")
+
+    fake_extrator.registrar("m.jpg", [1.0, 0.0, 0.0])
+    service.registrar_marca(
+        "m.jpg", "ex_libris", embedding=fake_extrator("m.jpg"),
+        obra_id=obra_id, confirmado=True,
+    )
+
+    assert service._conferir_prototipo_obra(obra_id) is True
+
+
+def test_conferir_prototipo_obra_detecta_inconsistencia(fake_extrator, make_service):
+    service = make_service(limiar_similaridade=0.5)
+    obra_id = service.cadastrar_obra("Obra")
+
+    fake_extrator.registrar("m.jpg", [1.0, 0.0, 0.0])
+    service.registrar_marca(
+        "m.jpg", "ex_libris", embedding=fake_extrator("m.jpg"),
+        obra_id=obra_id, confirmado=True,
+    )
+
+    # Força uma divergência manual, simulando memória corrompida
+    service._prototipos[obra_id] = np.array([99.0, 99.0, 99.0], dtype=np.float32)
+
+    assert service._conferir_prototipo_obra(obra_id) is False
+
+def test_remover_marca_remove_contribuicao_do_prototipo(fake_extrator, make_service, fake_repository):
+    service = make_service(repository=fake_repository, limiar_similaridade=0.5)
+    obra_id = service.cadastrar_obra("Obra")
+
+    fake_extrator.registrar("m.jpg", [1.0, 0.0, 0.0])
+    marca_id = service.registrar_marca(
+        "m.jpg", "ex_libris", embedding=fake_extrator("m.jpg"),
+        obra_id=obra_id, confirmado=True,
+    )
+    assert service._contagem_prototipo[obra_id] == 1
+
+    service.remover_marca(marca_id)
+
+    assert service._contagem_prototipo[obra_id] == 0
+    np.testing.assert_allclose(service._prototipos[obra_id], [0.0, 0.0, 0.0])
+    assert marca_id not in service._marcas_por_id
