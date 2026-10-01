@@ -37,23 +37,27 @@ class CatalogRecognitionService:
                 self._atualizar_prototipo(marca.obra_id, marca.embedding)
 
     def _atualizar_prototipo(self, obra_id: int, embedding: np.ndarray) -> None:
-        n = self._contagem_prototipo[obra_id]
-        media_atual = self._prototipos[obra_id]
-        nova_media = (media_atual * n + embedding) / (n + 1)
-        norma = np.linalg.norm(nova_media)
-        self._prototipos[obra_id] = nova_media / norma if norma > 0 else nova_media
+        self._prototipos[obra_id] = self._prototipos[obra_id] + embedding
         self._contagem_prototipo[obra_id] += 1
 
     def _pontuar_obras_candidatas(
         self, embedding: np.ndarray, vizinhos: Iterable[tuple[int, float]]
     ) -> dict[int, float]:
         pontos = defaultdict(float)
+
         for marca_id, score in vizinhos:
             marca = self._marcas_por_id[marca_id]
             if marca.obra_id and marca.confirmado:
                 pontos[marca.obra_id] = max(pontos[marca.obra_id], score)
 
-        for obra_id, prototipo in self._prototipos.items():
+        for obra_id, soma in self._prototipos.items():
+            n = self._contagem_prototipo[obra_id]
+            if n == 0:
+                continue # failsafe caso por algum motivo tenha chego obra com 0 em contagem
+            media = soma / n
+            norma = np.linalg.norm(media)
+            prototipo = media / norma if norma > 0 else media
+
             score_prototipo = float(np.dot(prototipo, embedding))
             if obra_id in pontos:
                 pontos[obra_id] = 0.5 * pontos[obra_id] + 0.5 * score_prototipo
@@ -136,6 +140,11 @@ class CatalogRecognitionService:
             marca_atual and marca_atual.confirmado and marca_atual.obra_id == obra_id
         )
 
+        if marca_atual and marca_atual.confirmado and marca_atual.obra_id != obra_id:
+            obra_antiga = marca_atual.obra_id
+            self._prototipos[obra_antiga] = self._prototipos[obra_antiga] - marca_atual.embedding
+            self._contagem_prototipo[obra_antiga] -= 1
+
         self._repository.atualizar_vinculo_marca(marca_id, obra_id, confirmado=True)
         marca = self._repository.buscar_marca(marca_id)
         self._marcas_por_id[marca_id].obra_id = obra_id
@@ -143,6 +152,42 @@ class CatalogRecognitionService:
 
         if not ja_contribuiu:
             self._atualizar_prototipo(obra_id, marca.embedding)
+
+        if not self._conferir_prototipo_obra(obra_id):
+            raise RuntimeError(f"Protótipo da obra {obra_id} divergiu da base após confirmar vínculo.")
+
+    def remover_marca(self, marca_id: int) -> None:
+        marca_atual = self._marcas_por_id.get(marca_id)
+        obra_antiga = marca_atual.obra_id if marca_atual else None
+
+        if marca_atual and marca_atual.confirmado and marca_atual.obra_id:
+            self._prototipos[obra_antiga] = self._prototipos[obra_antiga] - marca_atual.embedding
+            self._contagem_prototipo[obra_antiga] -= 1
+
+        self._repository.remover_marca(marca_id)
+        del self._marcas_por_id[marca_id]
+
+        if obra_antiga and not self._conferir_prototipo_obra(obra_antiga):
+            raise RuntimeError(f"Protótipo da obra {obra_antiga} divergiu da base após remover marca.")
+
+    def _conferir_prototipo_obra(self, obra_id: int) -> bool:
+        marcas = self._repository.listar_marcas_confirmadas_por_obra(obra_id)
+
+        soma_base = np.zeros_like(self._prototipos[obra_id])
+        for marca in marcas:
+            soma_base += marca.embedding
+
+        n_base = len(marcas)
+
+        soma_memoria = self._prototipos[obra_id]
+        n_memoria = self._contagem_prototipo[obra_id]
+
+        return n_base == n_memoria and np.allclose(soma_base, soma_memoria)
+
+
+
+
+
 
 
 ObraRecognizer = CatalogRecognitionService

@@ -85,6 +85,15 @@ class FakeRepository:
                 registro["aceito"] = aceito
                 return
 
+    def listar_marcas_confirmadas_por_obra(self, obra_id):
+        return [
+            replace(self._marcas[i]) for i in sorted(self._marcas)
+            if self._marcas[i].obra_id == obra_id and self._marcas[i].confirmado
+        ]
+
+    def remover_marca(self, marca_id) -> None:
+        self._marcas.pop(marca_id, None)
+
 
 class FakeExtrator:
     """Extrator de embeddings determinístico: devolve o vetor sintético
